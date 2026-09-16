@@ -1,0 +1,52 @@
+# Python & Environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Jupyter & IDEs
+.ipynb_checkpoints
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Large Binary Graph Data & Checkpoints (>100MB rejected by GitHub)
+*.pt
+*.pth
+*.bin
+*.ckpt
+
+# Large Raw Datasets & Intermediate CSV/Excel (>50MB)
+dataset/elliptic_bitcoin_dataset/*.csv
+dataset/updated/*.csv
+dataset/updated/*.xlsx
+dataset/preprocessed_nodes_labeled.xlsx
+*.csv.gz
+*.tar.gz
+*.zip
+
+# Logs & Temporary Files
+*.log
+scratch/
+tmp/
+temp/
