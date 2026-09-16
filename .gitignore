@@ -45,6 +45,15 @@ dataset/preprocessed_nodes_labeled.xlsx
 *.tar.gz
 *.zip
 
+# Excluded Documents on Data-and-Code branch
+*.doc
+*.docx
+*.pdf
+*.txt
+notes/
+paper 1 (education)
+SUMMARY_PHASEWISE_REPORT.md
+
 # Logs & Temporary Files
 *.log
 scratch/
