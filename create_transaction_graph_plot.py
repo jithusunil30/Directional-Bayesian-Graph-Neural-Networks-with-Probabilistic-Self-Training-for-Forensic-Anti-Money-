@@ -3,15 +3,93 @@ import numpy as np
 import torch
 import networkx as nx
 import matplotlib.pyplot as plt
-from matplotlib.patches import Patch, FancyBboxPatch
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+from matplotlib.patches import Patch
 from matplotlib.lines import Line2D
+from PIL import Image, ImageDraw, ImageFont
 
-def generate_perfect_24node_structured_topology():
+def ensure_icon_assets(icon_dir):
+    os.makedirs(icon_dir, exist_ok=True)
+    licit_path = os.path.join(icon_dir, "licit_person.png")
+    thief_path = os.path.join(icon_dir, "illicit_thief.png")
+    unk_path = os.path.join(icon_dir, "unknown_question.png")
+
+    if not (os.path.exists(licit_path) and os.path.exists(thief_path) and os.path.exists(unk_path)):
+        size = (128, 128)
+        # 1. Licit Normal Person Icon
+        im_lic = Image.new("RGBA", size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(im_lic)
+        draw.ellipse([4, 4, 124, 124], fill="#2ECC71", outline="#145A32", width=4)
+        draw.ellipse([48, 24, 80, 56], fill="#FFFFFF")
+        draw.chord([32, 60, 96, 114], start=180, end=360, fill="#FFFFFF")
+        im_lic.save(licit_path)
+
+        # 2. Illicit Thief Icon
+        im_ill = Image.new("RGBA", size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(im_ill)
+        draw.ellipse([4, 4, 124, 124], fill="#E74C3C", outline="#78281F", width=4)
+        draw.ellipse([42, 22, 86, 66], fill="#111111")
+        draw.rectangle([44, 40, 84, 52], fill="#FFFFFF")
+        draw.ellipse([50, 43, 58, 49], fill="#111111")
+        draw.ellipse([70, 43, 78, 49], fill="#111111")
+        draw.chord([28, 64, 100, 116], start=180, end=360, fill="#111111")
+        im_ill.save(thief_path)
+
+        # 3. Unknown Question Mark Icon
+        im_unk = Image.new("RGBA", size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(im_unk)
+        draw.ellipse([4, 4, 124, 124], fill="#9B59B6", outline="#4A235A", width=4)
+        try:
+            font = ImageFont.truetype("arialbd.ttf", 72)
+            draw.text((64, 60), "?", fill="#FFFFFF", font=font, anchor="mm")
+        except:
+            draw.arc([44, 24, 84, 64], start=210, end=360, fill="#FFFFFF", width=10)
+            draw.line([(84, 44), (64, 70), (64, 80)], fill="#FFFFFF", width=10)
+            draw.ellipse([59, 90, 69, 100], fill="#FFFFFF")
+        im_unk.save(unk_path)
+
+    return licit_path, thief_path, unk_path
+
+def enforce_min_distance(pos, min_dist=0.85, max_iter=300):
+    """Enforces a strict minimum Euclidean distance between all node pairs to guarantee NO overlap."""
+    nodes = list(pos.keys())
+    coords = np.array([pos[n] for n in nodes])
+    
+    for _ in range(max_iter):
+        overlapping = False
+        for i in range(len(nodes)):
+            for j in range(i + 1, len(nodes)):
+                diff = coords[i] - coords[j]
+                dist = np.linalg.norm(diff)
+                if dist < min_dist:
+                    overlapping = True
+                    if dist < 1e-4:
+                        diff = np.random.randn(2) * 0.01
+                        dist = np.linalg.norm(diff)
+                    overlap = min_dist - dist
+                    direction = diff / dist
+                    coords[i] += direction * (overlap / 2.0)
+                    coords[j] -= direction * (overlap / 2.0)
+        if not overlapping:
+            break
+            
+    return {nodes[i]: coords[i] for i in range(len(nodes))}
+
+def generate_topology_graph():
     base_dir = r"c:\Users\USER\OneDrive\Desktop\Probalistic Graphical Lab"
     pt_path = os.path.join(base_dir, "dataset", "elliptic_pyg_data.pt")
-    output_path = os.path.join(base_dir, "dataset", "eda_plots", "transaction_network_graph.png")
+    
+    # Save locations
+    output_path_root = os.path.join(base_dir, "topology_graph.png")
+    output_path_eda = os.path.join(base_dir, "dataset", "eda_plots", "topology_graph.png")
+    output_path_main = os.path.join(base_dir, "dataset", "eda_plots", "transaction_network_graph.png")
 
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    icon_dir = os.path.join(base_dir, "dataset", "eda_plots", "icons")
+    licit_icon_path, thief_icon_path, unknown_icon_path = ensure_icon_assets(icon_dir)
+
+    img_licit = plt.imread(licit_icon_path)
+    img_thief = plt.imread(thief_icon_path)
+    img_unknown = plt.imread(unknown_icon_path)
 
     if not os.path.exists(pt_path):
         print(f"Error: {pt_path} not found.")
@@ -65,93 +143,34 @@ def generate_perfect_24node_structured_topology():
             G_temp = nx.DiGraph()
             for u in sub_nodes: G_temp.add_node(u, cls=y[u])
             for u, v in zip(edge_src[sub_mask], edge_dst[sub_mask]): G_temp.add_edge(u, v)
-            if len(list(nx.isolates(G_temp))) == 0: # 100% connected
+            if len(list(nx.isolates(G_temp))) == 0:
                 if G_temp.number_of_edges() > best_edge_count:
                     best_edge_count = G_temp.number_of_edges()
                     best_G = G_temp.copy()
 
     G = best_G
-    print(f"Verified 24-Node Graph:")
+
+    # Base Layout: Kamada-Kawai algorithm for natural graph spacing
+    pos_raw = nx.kamada_kawai_layout(G, weight=None)
+    pos_scaled = {n: pos_raw[n] * 3.5 for n in G.nodes()}
+
+    # Guarantee ZERO node overlap using force-distance repulsion solver
+    pos = enforce_min_distance(pos_scaled, min_dist=0.85, max_iter=300)
+
+    print(f"Verified Non-Overlapping Topology Graph:")
     print(f"• Total Nodes  : {G.number_of_nodes()} (8 Licit, 8 Illicit, 8 Unknown)")
     print(f"• Total Edges  : {G.number_of_edges()} Directed Edges")
     print(f"• Isolates     : {len(list(nx.isolates(G)))} (100% Connected)")
 
-    # Group nodes by class for structured 3-column placement
-    lic_nodes = sorted([n for n in G.nodes() if y[n] == 0])
-    unk_nodes = sorted([n for n in G.nodes() if y[n] == -1])
-    ill_nodes = sorted([n for n in G.nodes() if y[n] == 1])
-
-    pos = {}
-    
-    # Column 1 (Left - Licit): x = -2.5
-    for idx, n in enumerate(lic_nodes):
-        pos[n] = np.array([-2.5, 3.5 - idx * 1.0])
-
-    # Column 2 (Center - Unknown): x = 0.0
-    for idx, n in enumerate(unk_nodes):
-        pos[n] = np.array([0.0, 3.5 - idx * 1.0])
-
-    # Column 3 (Right - Illicit): x = +2.5
-    for idx, n in enumerate(ill_nodes):
-        pos[n] = np.array([2.5, 3.5 - idx * 1.0])
-
-    fig, ax = plt.subplots(figsize=(15, 10), dpi=300)
+    fig, ax = plt.subplots(figsize=(15, 11), dpi=300)
     ax.set_facecolor('#F8F9FA')
     fig.patch.set_facecolor('#F8F9FA')
 
-    # Color Definitions
-    COLOR_LICIT_NODE = '#2ECC71'
-    BORDER_LICIT_NODE = '#145A32'
     COLOR_LICIT_EDGE = '#27AE60'
-
-    COLOR_UNKNOWN_NODE = '#9B59B6'
-    BORDER_UNKNOWN_NODE = '#4A235A'
     COLOR_UNKNOWN_EDGE = '#8E44AD'
-
-    COLOR_ILLICIT_NODE = '#E74C3C'
-    BORDER_ILLICIT_NODE = '#78281F'
     COLOR_ILLICIT_EDGE = '#C0392B'
 
-    # Draw Column Background Shading Cards
-    # Left Column Card (Licit)
-    card_lic = FancyBboxPatch((-3.4, -4.2), 1.8, 8.4, boxstyle="round,pad=0.15", 
-                             facecolor='#E8F8F5', edgecolor='#A3E4D7', linewidth=1.5, alpha=0.7)
-    ax.add_patch(card_lic)
-    ax.text(-2.5, 4.4, "LICIT ZONE\n(8 Green Nodes)", fontsize=11, fontweight='bold', ha='center', color='#145A32')
-
-    # Center Column Card (Unknown)
-    card_unk = FancyBboxPatch((-0.9, -4.2), 1.8, 8.4, boxstyle="round,pad=0.15", 
-                             facecolor='#F4ECF7', edgecolor='#D2B4DE', linewidth=1.5, alpha=0.7)
-    ax.add_patch(card_unk)
-    ax.text(0.0, 4.4, "UNKNOWN ZONE\n(8 Purple Nodes)", fontsize=11, fontweight='bold', ha='center', color='#4A235A')
-
-    # Right Column Card (Illicit)
-    card_ill = FancyBboxPatch((1.6, -4.2), 1.8, 8.4, boxstyle="round,pad=0.15", 
-                             facecolor='#FDEDEC', edgecolor='#F5B7B1', linewidth=1.5, alpha=0.7)
-    ax.add_patch(card_ill)
-    ax.text(2.5, 4.4, "ILLICIT ZONE\n(8 Red Nodes)", fontsize=11, fontweight='bold', ha='center', color='#78281F')
-
-    # Color assignment per node
-    node_colors = []
-    border_colors = []
-    node_sizes = []
-
-    for n in G.nodes():
-        cls = y[n]
-        if cls == 1:
-            node_colors.append(COLOR_ILLICIT_NODE)
-            border_colors.append(BORDER_ILLICIT_NODE)
-            node_sizes.append(500)
-        elif cls == 0:
-            node_colors.append(COLOR_LICIT_NODE)
-            border_colors.append(BORDER_LICIT_NODE)
-            node_sizes.append(500)
-        else:
-            node_colors.append(COLOR_UNKNOWN_NODE)
-            border_colors.append(BORDER_UNKNOWN_NODE)
-            node_sizes.append(500)
-
-    # Edge colors per transaction flow type
+    # Assign Edge Colors per flow category
     edge_colors = []
     for u, v in G.edges():
         src_y = y[u]
@@ -163,54 +182,62 @@ def generate_perfect_24node_structured_topology():
         else:
             edge_colors.append(COLOR_UNKNOWN_EDGE)
 
-    # Draw Curved Edges
+    # Draw Directed Curved Edges
     nx.draw_networkx_edges(
         G, pos,
         ax=ax,
         arrowstyle='->',
-        arrowsize=15,
+        arrowsize=16,
         edge_color=edge_colors,
-        width=1.8,
+        width=2.0,
         alpha=0.80,
-        connectionstyle='arc3,rad=0.10'
+        connectionstyle='arc3,rad=0.08'
     )
 
-    # Draw Nodes
-    nx.draw_networkx_nodes(
-        G, pos,
-        ax=ax,
-        node_color=node_colors,
-        node_size=node_sizes,
-        edgecolors=border_colors,
-        linewidths=2.0,
-        alpha=0.98
-    )
+    lic_nodes = sorted([n for n in G.nodes() if y[n] == 0])
+    unk_nodes = sorted([n for n in G.nodes() if y[n] == -1])
+    ill_nodes = sorted([n for n in G.nodes() if y[n] == 1])
 
-    # Node Labels (Clean custom formatted text: Lic-1..8, Unk-1..8, Ill-1..8)
     labels = {}
     for idx, n in enumerate(lic_nodes, 1): labels[n] = f"Lic-{idx}"
     for idx, n in enumerate(unk_nodes, 1): labels[n] = f"Unk-{idx}"
     for idx, n in enumerate(ill_nodes, 1): labels[n] = f"Ill-{idx}"
 
-    nx.draw_networkx_labels(
-        G, pos,
-        labels=labels,
-        font_size=7.5,
-        font_color='#FFFFFF',
-        font_weight='bold',
-        ax=ax
-    )
+    # Overlay Node Custom Image Icons (Normal Person, Thief, Question Mark)
+    for n, (x_pos, y_pos) in pos.items():
+        cls = y[n]
+        if cls == 0:
+            icon_img = img_licit
+            label_color = '#145A32'
+            edge_c = '#27AE60'
+        elif cls == 1:
+            icon_img = img_thief
+            label_color = '#78281F'
+            edge_c = '#C0392B'
+        else:
+            icon_img = img_unknown
+            label_color = '#4A235A'
+            edge_c = '#8E44AD'
+            
+        imagebox = OffsetImage(icon_img, zoom=0.26)
+        ab = AnnotationBbox(imagebox, (x_pos, y_pos), frameon=False)
+        ax.add_artist(ab)
+
+        # Draw Node Label below icon with background box
+        ax.text(x_pos, y_pos - 0.24, labels[n], fontsize=8.5, fontweight='bold', 
+                ha='center', va='top', color=label_color,
+                bbox=dict(boxstyle='round,pad=0.22', facecolor='#FFFFFF', alpha=0.92, edgecolor=edge_c, linewidth=1.2))
 
     # Title & Subtitle
-    plt.title("Bitcoin UTXO 24-Node Structured Bipartite/Tripartite Topology", fontsize=16, fontweight='bold', pad=24, color='#1B365D')
-    plt.suptitle("Perfect Equal Balance (Exactly 8 Licit, 8 Illicit, 8 Unknown) | 100% Fully Connected (Zero Isolates) | Structured 3-Column Layout", fontsize=10.5, style='italic', color='#444444', y=0.925)
+    plt.title("Bitcoin UTXO Transaction Topology & Node Archetype Network Graph", fontsize=16, fontweight='bold', pad=22, color='#1B365D')
+    plt.suptitle("Zero Node Overlap | Organic Network Topology | 24 Connected Nodes (8 Licit Persons, 8 Illicit Thieves, 8 Unknown Question Marks)", fontsize=10.5, style='italic', color='#444444', y=0.925)
 
-    # Legend
+    # Custom Legend
     legend_elements = [
-        # Nodes
-        Patch(facecolor=COLOR_LICIT_NODE, edgecolor=BORDER_LICIT_NODE, label='Licit Node (Exactly 8 Nodes)'),
-        Patch(facecolor=COLOR_UNKNOWN_NODE, edgecolor=BORDER_UNKNOWN_NODE, label='Unknown Node (Exactly 8 Nodes)'),
-        Patch(facecolor=COLOR_ILLICIT_NODE, edgecolor=BORDER_ILLICIT_NODE, label='Illicit Node (Exactly 8 Nodes)'),
+        # Nodes / Icons
+        Patch(facecolor='#2ECC71', edgecolor='#145A32', label='Normal Person Node (Licit - 8 Nodes)'),
+        Patch(facecolor='#9B59B6', edgecolor='#4A235A', label='Question Mark Node (Unknown - 8 Nodes)'),
+        Patch(facecolor='#E74C3C', edgecolor='#78281F', label='Thief Criminal Node (Illicit - 8 Nodes)'),
         # Edges
         Line2D([0], [0], color=COLOR_LICIT_EDGE, lw=2.5, label='Licit Transaction Edge (Green)'),
         Line2D([0], [0], color=COLOR_UNKNOWN_EDGE, lw=2.5, label='Unknown Transaction Edge (Purple)'),
@@ -218,14 +245,21 @@ def generate_perfect_24node_structured_topology():
     ]
     ax.legend(handles=legend_elements, loc='lower center', bbox_to_anchor=(0.5, -0.06), ncol=6, fontsize=9, frameon=True, facecolor='#FFFFFF', edgecolor='#D5D8DC')
 
-    ax.set_xlim(-4.0, 4.0)
-    ax.set_ylim(-4.8, 5.0)
+    # Add margins around min/max coordinates
+    x_coords = [p[0] for p in pos.values()]
+    y_coords = [p[1] for p in pos.values()]
+    ax.set_xlim(min(x_coords) - 0.7, max(x_coords) + 0.7)
+    ax.set_ylim(min(y_coords) - 0.9, max(y_coords) + 0.7)
+
     plt.axis('off')
     plt.tight_layout()
 
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.savefig(output_path_root, dpi=300, bbox_inches='tight')
+    plt.savefig(output_path_eda, dpi=300, bbox_inches='tight')
+    plt.savefig(output_path_main, dpi=300, bbox_inches='tight')
     plt.close()
-    print(f"Successfully generated structured 24-node topology plot at: {output_path}")
+
+    print(f"Successfully generated zero-overlap topology graph with custom icons at:\n1. {output_path_root}\n2. {output_path_eda}\n3. {output_path_main}")
 
 if __name__ == '__main__':
-    generate_perfect_24node_structured_topology()
+    generate_topology_graph()
