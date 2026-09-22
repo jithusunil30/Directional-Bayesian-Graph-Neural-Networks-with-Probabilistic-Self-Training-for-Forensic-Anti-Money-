@@ -230,14 +230,14 @@ def generate_topology_graph():
 
     # Title & Subtitle
     plt.title("Bitcoin UTXO Transaction Topology & Node Archetype Network Graph", fontsize=16, fontweight='bold', pad=22, color='#1B365D')
-    plt.suptitle("Zero Node Overlap | Organic Network Topology | 24 Connected Nodes (8 Licit Persons, 8 Illicit Thieves, 8 Unknown Question Marks)", fontsize=10.5, style='italic', color='#444444', y=0.925)
+    plt.suptitle("Organic Network Topology | 24 Connected Nodes (8 Licit , 8 Illicit , 8 Unknown )", fontsize=10.5, style='italic', color='#444444', y=0.925)
 
     # Custom Legend
     legend_elements = [
         # Nodes / Icons
-        Patch(facecolor='#2ECC71', edgecolor='#145A32', label='Normal Person Node (Licit - 8 Nodes)'),
-        Patch(facecolor='#9B59B6', edgecolor='#4A235A', label='Question Mark Node (Unknown - 8 Nodes)'),
-        Patch(facecolor='#E74C3C', edgecolor='#78281F', label='Thief Criminal Node (Illicit - 8 Nodes)'),
+        Patch(facecolor='#2ECC71', edgecolor='#145A32', label='Licit Nodes'),
+        Patch(facecolor='#9B59B6', edgecolor='#4A235A', label='Unknown Nodes'),
+        Patch(facecolor='#E74C3C', edgecolor='#78281F', label='Illicit Nodes'),
         # Edges
         Line2D([0], [0], color=COLOR_LICIT_EDGE, lw=2.5, label='Licit Transaction Edge (Green)'),
         Line2D([0], [0], color=COLOR_UNKNOWN_EDGE, lw=2.5, label='Unknown Transaction Edge (Purple)'),
