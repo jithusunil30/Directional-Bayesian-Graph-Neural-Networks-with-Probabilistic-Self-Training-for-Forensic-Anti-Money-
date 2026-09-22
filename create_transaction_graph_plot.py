@@ -3,144 +3,151 @@ import numpy as np
 import torch
 import networkx as nx
 import matplotlib.pyplot as plt
-from matplotlib.patches import Patch, FancyBboxPatch
+from matplotlib.patches import Patch
 from matplotlib.lines import Line2D
 
-def generate_enhanced_4zone_topology():
+def generate_balanced_colored_topology():
     base_dir = r"c:\Users\USER\OneDrive\Desktop\Probalistic Graphical Lab"
     pt_path = os.path.join(base_dir, "dataset", "elliptic_pyg_data.pt")
     output_path = os.path.join(base_dir, "dataset", "eda_plots", "transaction_network_graph.png")
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-    # Attempt to load real PyG graph data
-    use_real_data = False
-    if os.path.exists(pt_path):
-        try:
-            data = torch.load(pt_path, weights_only=False)
-            y = data.y.numpy()
-            edge_index = data.edge_index.numpy()
-            time_step = data.time_step.numpy()
-            use_real_data = True
-            print("Loaded real PyG graph dataset.")
-        except Exception as e:
-            print(f"Error loading PyG data: {e}. Falling back to graph builder.")
+    if not os.path.exists(pt_path):
+        print(f"Error: {pt_path} not found.")
+        return
+
+    data = torch.load(pt_path, weights_only=False)
+    y = data.y.numpy()
+    edge_index = data.edge_index.numpy()
+    time_step = data.time_step.numpy()
+    
+    edge_src, edge_dst = edge_index[0], edge_index[1]
+
+    # Target: Exactly EQUAL number of Licit (0), Illicit (1), and Unknown (-1) nodes
+    N_PER_CLASS = 20  # 20 Licit + 20 Illicit + 20 Unknown = 60 Nodes Total
+
+    # Search for optimal window with maximum edge density among balanced nodes
+    best_edges = -1
+    best_selected = []
+
+    np.random.seed(42)
+    for ts in range(1, 49):
+        ts_nodes = np.where((time_step >= ts) & (time_step <= ts+1))[0]
+        ill = [n for n in ts_nodes if y[n] == 1]
+        lic = [n for n in ts_nodes if y[n] == 0]
+        unk = [n for n in ts_nodes if y[n] == -1]
+        
+        if len(ill) >= N_PER_CLASS and len(lic) >= N_PER_CLASS and len(unk) >= N_PER_CLASS:
+            mask = np.isin(edge_src, ts_nodes) & np.isin(edge_dst, ts_nodes)
+            sub_src, sub_dst = edge_src[mask], edge_dst[mask]
+            
+            G_temp = nx.DiGraph()
+            for u, v in zip(sub_src, sub_dst):
+                G_temp.add_edge(u, v)
+                
+            degs = dict(G_temp.degree())
+            
+            ill_sorted = sorted(ill, key=lambda n: degs.get(n, 0), reverse=True)[:N_PER_CLASS]
+            lic_sorted = sorted(lic, key=lambda n: degs.get(n, 0), reverse=True)[:N_PER_CLASS]
+            unk_sorted = sorted(unk, key=lambda n: degs.get(n, 0), reverse=True)[:N_PER_CLASS]
+            
+            selected = ill_sorted + lic_sorted + unk_sorted
+            
+            sub_mask = np.isin(edge_src, selected) & np.isin(edge_dst, selected)
+            edge_cnt = np.sum(sub_mask)
+            
+            if edge_cnt > best_edges:
+                best_edges = edge_cnt
+                best_selected = selected
+
+    selected_nodes = best_selected
+    print(f"Balanced Selection: {len(selected_nodes)} Nodes ({N_PER_CLASS} Licit, {N_PER_CLASS} Illicit, {N_PER_CLASS} Unknown)")
+
+    # Build directed graph
+    sub_mask = np.isin(edge_src, selected_nodes) & np.isin(edge_dst, selected_nodes)
+    sub_src = edge_src[sub_mask]
+    sub_dst = edge_dst[sub_mask]
 
     G = nx.DiGraph()
-    node_labels = {}
-    node_types = {}
-    pos = {}
+    for n in selected_nodes:
+        G.add_node(n, cls=y[n])
+    for u, v in zip(sub_src, sub_dst):
+        G.add_edge(u, v)
 
-    if use_real_data:
-        # Extract real multi-hop forensic structures from dataset
-        np.random.seed(42)
-        edge_src, edge_dst = edge_index[0], edge_index[1]
-        
-        # 1. Find illicit seeds
-        illicit_candidates = np.where((y == 1) & (time_step >= 15) & (time_step <= 25))[0]
-        if len(illicit_candidates) < 10:
-            illicit_candidates = np.where(y == 1)[0]
-            
-        seed_illicit = illicit_candidates[:12]
-        
-        # Collect 1-hop and 2-hop edges
-        mask1 = np.isin(edge_src, seed_illicit) | np.isin(edge_dst, seed_illicit)
-        hop1_nodes = set(edge_src[mask1]).union(set(edge_dst[mask1]))
-        
-        mask2 = np.isin(edge_src, list(hop1_nodes)[:40]) | np.isin(edge_dst, list(hop1_nodes)[:40])
-        hop2_nodes = set(edge_src[mask2]).union(set(edge_dst[mask2]))
-        
-        all_nodes = set(seed_illicit).union(hop1_nodes).union(hop2_nodes)
-        
-        # Filter to a compact, highly connected subset (~60-70 nodes)
-        sub_mask = np.isin(edge_src, list(all_nodes)) & np.isin(edge_dst, list(all_nodes))
-        sub_src = edge_src[sub_mask]
-        sub_dst = edge_dst[sub_mask]
-        
-        full_G = nx.DiGraph()
-        for u, v in zip(sub_src, sub_dst):
-            full_G.add_edge(u, v)
-            
-        for n in full_G.nodes():
-            full_G.nodes[n]['class'] = y[n]
+    # Remove isolated nodes if any, while preserving class balance log
+    print(f"Graph Construction: {G.number_of_nodes()} Nodes, {G.number_of_edges()} Directed Edges")
 
-        # Extract largest weakly connected component containing illicit nodes
-        components = [c for c in nx.weakly_connected_components(full_G) if any(y[n] == 1 for n in c)]
-        if components:
-            main_comp = max(components, key=len)
-            G = full_G.subgraph(main_comp).copy()
-        else:
-            G = full_G.copy()
-            
-        # Limit max nodes to keep plot clean and readable
-        if G.number_of_nodes() > 75:
-            # Keep highest degree nodes
-            degrees = dict(G.degree())
-            sorted_nodes = sorted(degrees.keys(), key=lambda k: degrees[k], reverse=True)[:70]
-            G = G.subgraph(sorted_nodes).copy()
-            
-        # Ensure graph has no isolated singletons
-        G.remove_nodes_from(list(nx.isolates(G)))
-        
-        for n in G.nodes():
-            cls = y[n]
-            node_types[n] = cls
-            if cls == 1:
-                node_labels[n] = f"Ill-{n}"
-            elif cls == 0:
-                node_labels[n] = f"Lic-{n}"
-            else:
-                node_labels[n] = f"Unk-{n}"
-                
-        # Position using layout
-        pos = nx.spring_layout(G, k=0.5, seed=42, iterations=150)
-    else:
-        # Fallback synthetic graph builder if dataset not found
-        np.random.seed(42)
-        
-    print(f"Visualizing Graph Topology: {G.number_of_nodes()} Nodes, {G.number_of_edges()} Directed Edges")
+    # Compute spring layout
+    pos = nx.spring_layout(G, k=0.48, seed=42, iterations=180)
 
-    # Set up styling
     fig, ax = plt.subplots(figsize=(15, 10), dpi=300)
-    ax.set_facecolor('#F8F9FA')
-    fig.patch.set_facecolor('#F8F9FA')
+    ax.set_facecolor('#F9FAFC')
+    fig.patch.set_facecolor('#F9FAFC')
 
-    # Color & Size mapping
+    # Color definitions: Distinct colors for Nodes & Edges
+    # Licit (Class 0): Emerald Green
+    # Illicit (Class 1): Crimson Red
+    # Unknown (Class -1): Vibrant Amethyst Purple
+    
+    COLOR_LICIT_NODE = '#2ECC71'
+    BORDER_LICIT_NODE = '#145A32'
+    COLOR_LICIT_EDGE = '#27AE60'
+
+    COLOR_ILLICIT_NODE = '#E74C3C'
+    BORDER_ILLICIT_NODE = '#78281F'
+    COLOR_ILLICIT_EDGE = '#C0392B'
+
+    COLOR_UNKNOWN_NODE = '#9B59B6'
+    BORDER_UNKNOWN_NODE = '#4A235A'
+    COLOR_UNKNOWN_EDGE = '#8E44AD'
+
     node_colors = []
-    node_sizes = []
     border_colors = []
+    node_sizes = []
 
-    in_degrees = dict(G.in_degree())
-    out_degrees = dict(G.out_degree())
     total_degrees = dict(G.degree())
 
     for n in G.nodes():
-        cls = node_types.get(n, -1)
+        cls = y[n]
         deg = total_degrees.get(n, 1)
-        size = max(180, min(800, 180 + deg * 45))
+        size = max(240, min(850, 240 + deg * 50))
         
         if cls == 1: # Illicit
-            node_colors.append('#E74C3C') # Crimson Red
-            border_colors.append('#78281F')
-            node_sizes.append(size + 80)
+            node_colors.append(COLOR_ILLICIT_NODE)
+            border_colors.append(BORDER_ILLICIT_NODE)
+            node_sizes.append(size + 60)
         elif cls == 0: # Licit
-            node_colors.append('#2ECC71') # Emerald Green
-            border_colors.append('#145A32')
+            node_colors.append(COLOR_LICIT_NODE)
+            border_colors.append(BORDER_LICIT_NODE)
             node_sizes.append(size)
-        else: # Unlabeled / Unknown (-1)
-            node_colors.append('#95A5A6') # Slate Gray
-            border_colors.append('#34495E')
-            node_sizes.append(size - 20)
+        else: # Unknown (-1)
+            node_colors.append(COLOR_UNKNOWN_NODE)
+            border_colors.append(BORDER_UNKNOWN_NODE)
+            node_sizes.append(size)
 
-    # Draw Directed Edges with curved arrows
+    # Assign Edge Colors based on transaction flow category
+    edge_colors = []
+    for u, v in G.edges():
+        src_y = y[u]
+        dst_y = y[v]
+        
+        if src_y == 1 or dst_y == 1:
+            edge_colors.append(COLOR_ILLICIT_EDGE) # Red for Illicit flow
+        elif src_y == 0 and dst_y == 0:
+            edge_colors.append(COLOR_LICIT_EDGE)   # Green for Licit flow
+        else:
+            edge_colors.append(COLOR_UNKNOWN_EDGE) # Purple for Unknown / Mixed flow
+
+    # Draw Colored Edges with Curved Arrows
     nx.draw_networkx_edges(
         G, pos,
         ax=ax,
         arrowstyle='->',
         arrowsize=14,
-        edge_color='#BDC3C7',
-        width=1.3,
-        alpha=0.65,
+        edge_color=edge_colors,
+        width=1.6,
+        alpha=0.75,
         connectionstyle='arc3,rad=0.08'
     )
 
@@ -152,62 +159,65 @@ def generate_enhanced_4zone_topology():
         node_size=node_sizes,
         edgecolors=border_colors,
         linewidths=1.8,
-        alpha=0.92
+        alpha=0.95
     )
 
-    # Selective node labeling for key nodes
-    illicit_nodes = [n for n in G.nodes() if node_types.get(n) == 1]
-    high_deg_nodes = [n for n in G.nodes() if total_degrees.get(n, 0) >= 4]
-    labeled_subset = set(illicit_nodes).union(high_deg_nodes)
-    
-    labels_to_draw = {n: str(n) for n in labeled_subset}
+    # Node ID Labels
+    node_labels = {}
+    for n in G.nodes():
+        cls = y[n]
+        if cls == 1:
+            node_labels[n] = f"Ill-{n}"
+        elif cls == 0:
+            node_labels[n] = f"Lic-{n}"
+        else:
+            node_labels[n] = f"Unk-{n}"
+
     nx.draw_networkx_labels(
         G, pos,
-        labels=labels_to_draw,
-        font_size=7,
-        font_color='#2C3E50',
+        labels=node_labels,
+        font_size=6.5,
+        font_color='#111111',
         font_weight='bold',
         ax=ax
     )
 
-    # Add Zone Annotations / Callouts
-    x_vals = [p[0] for p in pos.values()]
-    y_vals = [p[1] for p in pos.values()]
-    x_min, x_max = min(x_vals), max(x_vals)
-    y_min, y_max = min(y_vals), max(y_vals)
-
     # Title & Subtitle
-    plt.title("Bitcoin UTXO Transaction Topology & Forensic Multi-Zone Network Architecture", 
-              fontsize=16, fontweight='bold', pad=18, color='#1B365D')
-    plt.suptitle("Direct Visualization of Payment Connections Across Licit (Green), Illicit (Red), and Unlabeled Unknown (Gray) Transaction Nodes", 
-                 fontsize=10.5, style='italic', color='#555555', y=0.925)
+    plt.title("Bitcoin UTXO Balanced Transaction Network Topology", fontsize=16, fontweight='bold', pad=18, color='#1B365D')
+    plt.suptitle("Equal Representation (20 Licit, 20 Illicit, 20 Unknown) with Distinct Node & Edge Color Coding", fontsize=10.5, style='italic', color='#444444', y=0.925)
 
-    # Legend
+    # Custom Multi-Section Legend for Nodes & Edges
     legend_elements = [
-        Patch(facecolor='#E74C3C', edgecolor='#78281F', label='Illicit Transaction Node (Class 1)'),
-        Patch(facecolor='#2ECC71', edgecolor='#145A32', label='Licit Transaction Node (Class 0)'),
-        Patch(facecolor='#95A5A6', edgecolor='#34495E', label='Unlabeled / Unknown Node (Class -1)'),
-        Line2D([0], [0], color='#BDC3C7', lw=2, label='Directed UTXO Payment Flow (u -> v)')
+        # Node Categories
+        Patch(facecolor=COLOR_ILLICIT_NODE, edgecolor=BORDER_ILLICIT_NODE, label='Illicit Node (20 Nodes / 33.3%)'),
+        Patch(facecolor=COLOR_LICIT_NODE, edgecolor=BORDER_LICIT_NODE, label='Licit Node (20 Nodes / 33.3%)'),
+        Patch(facecolor=COLOR_UNKNOWN_NODE, edgecolor=BORDER_UNKNOWN_NODE, label='Unknown Node (20 Nodes / 33.3%)'),
+        # Edge Categories
+        Line2D([0], [0], color=COLOR_ILLICIT_EDGE, lw=2.5, label='Illicit Transaction Edge (Red)'),
+        Line2D([0], [0], color=COLOR_LICIT_EDGE, lw=2.5, label='Licit Transaction Edge (Green)'),
+        Line2D([0], [0], color=COLOR_UNKNOWN_EDGE, lw=2.5, label='Unknown Transaction Edge (Purple)')
     ]
-    ax.legend(handles=legend_elements, loc='lower right', fontsize=10, frameon=True, facecolor='#FFFFFF', edgecolor='#D5D8DC')
+    ax.legend(handles=legend_elements, loc='lower right', fontsize=9.5, frameon=True, facecolor='#FFFFFF', edgecolor='#D5D8DC')
 
-    # Add forensic annotation box in upper left
-    info_text = (
-        "Forensic Structural Patterns:\n"
-        "• Peeling Chains: 1-In / 2-Out multi-hop laundering sequences\n"
-        "• Fan-In Mixing Hubs: High in-degree consolidation deposits\n"
-        "• Fan-Out Dispersion: High out-degree ransomware distribution\n"
-        "• 77.15% Unlabeled Hop Bridge: Gray nodes linking illicit to licit"
+    # Information Callout Box
+    info_box = (
+        f"Equal 1:1:1 Balanced Graph Topology:\n"
+        f"• Licit Transactions   : 20 Nodes (Green)\n"
+        f"• Illicit Transactions : 20 Nodes (Red)\n"
+        f"• Unknown Transactions : 20 Nodes (Purple)\n"
+        f"• Total Subgraph Nodes : 60 Nodes\n"
+        f"• Total Directed Edges : {G.number_of_edges()} Edges\n"
+        f"• Edge Color Coding    : Green (Licit) | Red (Illicit) | Purple (Unknown)"
     )
-    ax.text(0.02, 0.98, info_text, transform=ax.transAxes, fontsize=9,
-            verticalalignment='top', bbox=dict(boxstyle='round,pad=0.6', facecolor='#F4F6F9', alpha=0.9, edgecolor='#1B365D'))
+    ax.text(0.02, 0.98, info_box, transform=ax.transAxes, fontsize=9,
+            verticalalignment='top', bbox=dict(boxstyle='round,pad=0.6', facecolor='#F4F6F9', alpha=0.92, edgecolor='#1B365D'))
 
     plt.axis('off')
     plt.tight_layout()
 
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     plt.close()
-    print(f"Successfully generated updated topology plot at: {output_path}")
+    print(f"Successfully generated balanced, colored topology plot at: {output_path}")
 
 if __name__ == '__main__':
-    generate_enhanced_4zone_topology()
+    generate_balanced_colored_topology()
