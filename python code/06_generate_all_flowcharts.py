@@ -73,27 +73,29 @@ def generate_all_flowcharts_suite(out_dir):
     # -------------------------------------------------------------
     # 2. Phase 0: EDA & Topometry Deep-Dive
     # -------------------------------------------------------------
-    fig, ax = plt.subplots(figsize=(13, 7), dpi=300)
+    fig, ax = plt.subplots(figsize=(13, 7.5), dpi=300)
     ax.set_xlim(0, 13)
-    ax.set_ylim(0, 7)
+    ax.set_ylim(0, 7.5)
     ax.axis('off')
-    ax.text(6.5, 6.6, "2. Phase 0: Raw Data Ingestion & Graph Topometry Flowchart", ha='center', va='center', fontsize=14, weight='bold', color='#1B365D')
+    ax.text(6.5, 7.1, "2. Phase 0: Raw Data Ingestion & Graph Topometry Flowchart", ha='center', va='center', fontsize=14, weight='bold', color='#1B365D')
     
-    create_box(ax, "Raw CSV Tables\n• features.csv (203k x 167)\n• edgelist.csv (234k edges)\n• classes.csv (203k labels)", (0.5, 4.5), 3.2, 1.6, '#34495E')
-    create_arrow(ax, (3.7, 5.3), (4.5, 5.3))
+    create_box(ax, "Raw CSV Tables\n• features.csv (203k x 167)\n• edgelist.csv (234k edges)\n• classes.csv (203k labels)", (0.5, 5.0), 3.2, 1.6, '#34495E')
+    create_arrow(ax, (3.7, 5.8), (4.5, 5.8))
     
-    create_box(ax, "Feature Segmentation\n• Local Features (1-93): Fees, Inputs, Outputs, Volume\n• Aggregated Features (94-165): 1-Hop Neighbor Context", (4.5, 4.5), 4.2, 1.6, '#2980B9')
-    create_arrow(ax, (8.7, 5.3), (9.5, 5.3))
+    create_box(ax, "Feature Segmentation\n• Local Features (1-93): Fees, Inputs, Outputs, Volume\n• Aggregated Features (94-165): 1-Hop Neighbor Context", (4.5, 5.0), 4.2, 1.6, '#2980B9')
+    create_arrow(ax, (8.7, 5.8), (9.5, 5.8))
     
-    create_box(ax, "Class Distribution\n• Illicit: 4,545 (2.2%)\n• Licit: 42,019 (20.6%)\n• Unknown: 157,205 (77.1%)", (9.5, 4.5), 3.0, 1.6, '#C0392B')
+    create_box(ax, "Class Distribution\n• Illicit: 4,545 (2.2%)\n• Licit: 42,019 (20.6%)\n• Unknown: 157,205 (77.1%)", (9.5, 5.0), 3.0, 1.6, '#C0392B')
     
-    create_arrow(ax, (6.6, 4.5), (6.6, 3.4))
+    create_arrow(ax, (5.0, 5.0), (3.4, 3.4))
+    create_arrow(ax, (8.0, 5.0), (9.6, 3.4))
     
     create_box(ax, "Topological Topometry & Degree Computation\n• In-Degree (Incoming Funds) & Out-Degree (Dispersed Funds)\n• Licit Average Degree: 2.42 (High Multi-Party Connectivity)\n• Illicit Average Degree: 1.86 (Sparse Linear Peeling Chains)\n• Scale-Free Power-Law: Maximum Degree = 473", (0.5, 1.8), 5.8, 1.6, '#1B365D')
     
     create_box(ax, "Homophily & Outlier Profiling\n• Illicit-to-Illicit Outflow: 55.25% (Strong Criminal Clustering)\n• Licit-to-Licit Outflow: 94.63%\n• Outliers (IQR): High Anomalous Volume in Illicit Wallets\n• Conclusion: Relational GNNs Mandatory", (6.7, 1.8), 5.8, 1.6, '#27AE60')
 
-    create_arrow(ax, (6.3, 1.8), (6.7, 2.6))
+    create_arrow(ax, (6.3, 2.6), (6.7, 2.6))
+    create_arrow(ax, (6.5, 1.8), (6.5, 1.3))
     create_box(ax, "Core Problem Identified: 77.15% Unlabeled Transactions Sever Intermediary Laundering Paths", (1.5, 0.4), 10.0, 0.9, '#E74C3C')
 
     plt.tight_layout()
@@ -241,7 +243,7 @@ def generate_all_flowcharts_suite(out_dir):
     
     create_box(ax, "Fusion & LayerNorm\nh_v^(l+1) = LayerNorm(\n  sigma(h_in || h_out) + h_skip\n)", (9.3, 4.2), 3.2, 2.0, '#1B365D')
     
-    create_arrow(ax, (10.9, 4.2), (10.9, 3.1))
+    create_arrow(ax, (10.9, 4.2), (10.9, 3.0))
     
     create_box(ax, "Forensic Benefits of Directional Residual Convolution:\n• Asymmetry Aware: Accurately separates input pooling (mixers) from output peeling (dispersion).\n• Anti-Over-Smoothing: Skip projection preserves 165 raw transaction signals across deep layers.\n• Result: Single-model AUC-ROC leaps to 0.9249 (Dir-ResGCN) and 0.9195 (Dir-ResSAGE).", (0.8, 1.0), 11.4, 2.0, '#27AE60')
 
@@ -270,6 +272,7 @@ def generate_all_flowcharts_suite(out_dir):
     
     create_box(ax, "Soft Confidence-Weighted BCE Loss Formulation:\nL = - (1/N) * sum_{i=1}^N w_i * [ y_i * log(p_i) + pos_weight * (1 - y_i) * log(1 - p_i) ]\n• Borderline Ambiguous Nodes (P ~ 0.50) receive low weight (w ~ 0.50)\n• Confident Pseudo-Labels (P > 0.90) receive high weight (w ~ 0.95)\n• Ground-Truth Forensic Nodes strictly receive full weight (w = 1.0)", (1.0, 1.6), 11.0, 1.9, '#8E44AD')
     
+    create_arrow(ax, (6.5, 1.6), (6.5, 1.3))
     create_box(ax, "Impact: Eliminates noisy gradient pollution while preserving 100% graph connectivity!", (2.0, 0.4), 9.0, 0.9, '#2980B9')
 
     plt.tight_layout()
@@ -297,6 +300,7 @@ def generate_all_flowcharts_suite(out_dir):
     
     create_box(ax, "Uncertainty Decomposition Equations:\n• Predictive Mean (Point Probability):  mu_v = (1/T) * sum_{t=1}^T P_v^(t)\n• Epistemic Variance (Model Knowledge Gap):  sigma_epi^2(v) = (1/T) * sum_{t=1}^T (P_v^(t) - mu_v)^2\n• Aleatoric Entropy (Transaction Inherent Noise):  H_aleatoric(v) = - mu_v * log(mu_v) - (1 - mu_v) * log(1 - mu_v)", (1.0, 1.6), 11.0, 1.9, '#1B365D')
     
+    create_arrow(ax, (6.5, 1.6), (6.5, 1.3))
     create_box(ax, "Operational Significance: Flags whether an alert is a known laundering pattern or an unprecedented novel attack.", (1.0, 0.4), 11.0, 0.9, '#27AE60')
 
     plt.tight_layout()
@@ -347,12 +351,12 @@ def generate_all_flowcharts_suite(out_dir):
     
     create_box(ax, "Dual Outputs:\n• Probability P(illicit)\n• Uncertainty sigma_epi^2", (9.8, 5.0), 2.7, 1.6, '#1B365D')
     
-    create_arrow(ax, (11.1, 5.0), (11.1, 4.0))
-    create_box(ax, "Real-Time Compliance Decision Router", (3.0, 3.2), 7.0, 0.9, '#2C3E50')
+    create_box(ax, "Real-Time Compliance Decision Router", (2.0, 3.2), 9.5, 0.9, '#2C3E50')
+    create_arrow(ax, (11.1, 5.0), (11.1, 4.1))
     
-    create_arrow(ax, (4.0, 3.2), (2.2, 2.3))
-    create_arrow(ax, (6.5, 3.2), (6.5, 2.3))
-    create_arrow(ax, (9.0, 3.2), (10.8, 2.3))
+    create_arrow(ax, (3.5, 3.2), (2.4, 2.3))
+    create_arrow(ax, (6.75, 3.2), (6.5, 2.3))
+    create_arrow(ax, (10.0, 3.2), (10.6, 2.3))
     
     create_box(ax, "Tier 1: High Risk & Confident\n• P >= 0.93 AND Low Uncertainty\n-> Action: Automated Immediate Freeze\n-> Suspicious Activity Report (SAR) Filed\n-> Zero Human Delay Needed", (0.5, 0.4), 3.8, 1.9, '#C0392B')
     create_box(ax, "Tier 2: Ambiguous / Novel Attack\n• P in [0.70, 0.93] OR High Uncertainty\n-> Action: Route to AML Investigator\n-> Subgraph Visualization Rendered\n-> Forensic Officer Makes Final Call", (4.6, 0.4), 3.8, 1.9, '#E67E22')

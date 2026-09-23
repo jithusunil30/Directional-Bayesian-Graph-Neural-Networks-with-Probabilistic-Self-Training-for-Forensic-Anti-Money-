@@ -145,8 +145,8 @@ def generate_phase_flowcharts(output_dir):
 
     create_box(ax, "Phase 5: ML Training 3\n• State of the Art\n• Directional Flow Decoupling\n• Residual Skips + LayerNorm\n• Soft Confidence BCE (w_i)\n• Bayesian MC Dropout (T=25)", (9.7, 3.8), 3.0, 1.6, '#8E44AD')
 
-    # Bottom detailed architecture block
-    create_arrow(ax, (11.2, 3.8), (11.2, 2.5))
+    # Bottom detailed architecture block - Arrow ends cleanly on top edge Y=2.3
+    create_arrow(ax, (11.2, 3.8), (11.2, 2.3))
     create_box(ax, "Directional Residual Bayesian Convolution Formulation:\n"
                   "h_v^(l+1) = LayerNorm( sigma( W_in * Agg_{u in N_in(v)}(h_u) || W_out * Agg_{w in N_out(v)}(h_w) ) + W_res * h_v^(l) )\n"
                   "Loss: L = - sum w_i * [ y_i * log(p_i) + pos_weight * (1 - y_i) * log(1 - p_i) ] where w_i = max(P_i, 1 - P_i)\n"
@@ -169,10 +169,10 @@ def generate_phase_flowcharts(output_dir):
 
     create_box(ax, "Bayesian GNN Inference\nMonte Carlo Dropout (T=25)\n• Predictive Probability P(illicit)\n• Epistemic Uncertainty σ_epi^2", (3.8, 2.2), 3.4, 1.6, '#8E44AD')
 
-    # Three routing branches
-    create_arrow(ax, (7.2, 3.4), (8.2, 4.4))
-    create_arrow(ax, (7.2, 3.0), (8.2, 3.0))
-    create_arrow(ax, (7.2, 2.6), (8.2, 1.6))
+    # Three routing branches - cleanly centered on each target box
+    create_arrow(ax, (7.2, 3.4), (8.2, 4.55))
+    create_arrow(ax, (7.2, 3.0), (8.2, 2.95))
+    create_arrow(ax, (7.2, 2.6), (8.2, 1.35))
 
     create_box(ax, "Tier 1: High Risk & Confident\nP >= 0.93 & Low Uncertainty\n-> Immediate Automated Freeze\n-> SAR Auto-Generated", (8.2, 3.9), 3.5, 1.3, '#C0392B')
     create_box(ax, "Tier 2: Ambiguous / Novel Attack\nP in [0.70, 0.93] OR High Uncertainty\n-> Route to Compliance Officer\n-> Manual Forensic Investigation", (8.2, 2.3), 3.5, 1.3, '#E67E22')
